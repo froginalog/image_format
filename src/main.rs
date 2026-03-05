@@ -1,5 +1,5 @@
 
-use std::{fs, u32};
+use std::{fs};
 
 use bigdecimal::num_traits::Euclid;
 use image::{GenericImageView, ImageReader, Rgba};
@@ -9,18 +9,18 @@ fn encode(n:u8) -> String{
 
 
 
-    let mut curra:Vec<bool> = Vec::new();
+    let mut curr_a:Vec<bool> = Vec::new();
     let mut nxt:u8=n;
     let mut str_b = String::new();
     for _ in 0..8{
         let res = nxt.div_rem_euclid(&2);
-        curra.push(res.1 > 0);
+        curr_a.push(res.1 > 0);
 
         nxt = res.0;
     }
 
-    curra.reverse();
-    for val in curra{
+    curr_a.reverse();
+    for val in curr_a {
         if val{
             str_b.push('1');
         }else{
@@ -34,18 +34,18 @@ fn encode(n:u8) -> String{
 
 
 fn to_binary(n:u32) -> Vec<String> {
-    let mut curra:Vec<bool> = Vec::new();
+    let mut curr_a:Vec<bool> = Vec::new();
     let mut nxt:u32=n;
     let mut str_b = String::new();
     for _ in 0..32{
         let res = nxt.div_rem_euclid(&2);
-        curra.push(res.1 > 0);
+        curr_a.push(res.1 > 0);
 
         nxt = res.0;
     }
 
-    curra.reverse();
-    for val in curra{
+    curr_a.reverse();
+    for val in curr_a {
         if val{
             str_b.push('1');
         }else{
@@ -151,11 +151,13 @@ fn main() {
 
     let extension = ".gunk";
     let file_name = "tung";
-    let full_name = file_name.to_owned() +extension;
+    let full_name = file_name.to_owned()+extension;
+    
+    let convert_from = "images.png";
 
-    let img = ImageReader::open("equality_test.png").expect("REASON").decode().unwrap();
+    let img = ImageReader::open(convert_from).expect("Could not open image").decode().unwrap();
     let mut pixels = Vec::new();
-    let mut fstr = Vec::new();
+    let mut encoded_pixels = Vec::new();
 
     let width = to_binary(img.width());
     let height = to_binary(img.height());
@@ -174,10 +176,10 @@ fn main() {
             let g = encode(pix[1]);
             let b = encode(pix[2]);
             let a = encode(pix[3]);
-            fstr.push(r);
-            fstr.push(g);
-            fstr.push(b);
-            fstr.push(a);
+            encoded_pixels.push(r);
+            encoded_pixels.push(g);
+            encoded_pixels.push(b);
+            encoded_pixels.push(a);
 
         }
 
@@ -189,7 +191,7 @@ fn main() {
         .iter()
         .map(|s| u8::from_str_radix(s, 2).unwrap())
         .collect::<Vec<_>>();
-    let bytes: Vec<u8> = fstr
+    let bytes: Vec<u8> = encoded_pixels
         .iter()
         .map(|s| u8::from_str_radix(s, 2).unwrap())
         .collect();
@@ -198,7 +200,7 @@ fn main() {
     let comb = [&header_bytes[..],&bytes[..]].concat();
     fs::write(full_name.clone(), comb).expect("Should be able to write");
 
-    comp(&*full_name.clone(), "equality_test.png");
+    comp(&*full_name.clone(), convert_from);
 
 
 
