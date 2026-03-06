@@ -103,8 +103,22 @@ fn pixel_compare(c_pixel:Vec<u8>,o_pixel:Rgba<u8>) -> bool{
 fn comp(path_to_converted:&str, path_to_original:&str){
     println!("comp ran");
     let og_image = ImageReader::open(path_to_original).expect("Could not decode original path").decode().unwrap();
-    let conv_data = fs::read(path_to_converted).unwrap();
+    let mut conv_data = fs::read(path_to_converted).unwrap();
+    let mut sig_extracted = conv_data.clone();
+    let sig: Vec<u8> = vec![
+        102, 114, 111, 103, 105, 110, 97, 108, 111, 103, 32,
+        119, 97, 115, 32, 104, 101, 114, 101, 32, 117, 119, 117,
+        32, 58, 51
+    ];
+    sig_extracted.truncate(26);
 
+    println!("Detecting if signatures match");
+    if sig_extracted == sig{
+        println!("Signatures match!!! :D");
+    }else{
+        println!("Signatures dont match D:<")
+    }
+    conv_data.drain(0..26);
     let mut header_bits = conv_data.clone();
     header_bits.truncate(8);
     let headers = headers_parser(header_bits);
@@ -148,64 +162,70 @@ fn comp(path_to_converted:&str, path_to_original:&str){
 }
 
 fn main() {
-
-    let extension = ".gunk";
+    let sig: Vec<u8> = vec![
+        102, 114, 111, 103, 105, 110, 97, 108, 111, 103, 32,
+        119, 97, 115, 32, 104, 101, 114, 101, 32, 117, 119, 117,
+        32, 58, 51
+    ];
+    let sig_len= 26;
+    println!("sig_len: {}", sig_len);
+    let extension = ".sahur";
     let file_name = "tung";
     let full_name = file_name.to_owned()+extension;
-    
-    let convert_from = "images.png";
+    let convert:bool = true;
+    let convert_from = "debug.png";
+    if convert {
+        let img = ImageReader::open(convert_from).expect("Could not open image").decode().unwrap();
+        let mut pixels = Vec::new();
+        let mut encoded_pixels = Vec::new();
 
-    let img = ImageReader::open(convert_from).expect("Could not open image").decode().unwrap();
-    let mut pixels = Vec::new();
-    let mut encoded_pixels = Vec::new();
+        let width = to_binary(img.width());
+        let height = to_binary(img.height());
+        let mut size_headers = Vec::new();
+        size_headers.push(&width);
+        size_headers.push(&height);
+        println!("Height: {}, Width: {}", img.height(), img.width());
 
-    let width = to_binary(img.width());
-    let height = to_binary(img.height());
-    let mut size_headers = Vec::new();
-    size_headers.push(&width);
-    size_headers.push(&height);
-    println!("Height: {}, Width: {}", img.height(), img.width());
+        // encode image
+        for y in 0..img.dimensions().1 {
+            for x in 0..img.dimensions().0 {
+                let pix = img.get_pixel(x, y);
 
-    // encode image
-    for y in 0..img.dimensions().1 {
-        for x in 0..img.dimensions().0 {
-            let pix = img.get_pixel(x,y);
-
-            pixels.push((pix[0], pix[1],pix[2],pix[3]));
-            let r = encode(pix[0]);
-            let g = encode(pix[1]);
-            let b = encode(pix[2]);
-            let a = encode(pix[3]);
-            encoded_pixels.push(r);
-            encoded_pixels.push(g);
-            encoded_pixels.push(b);
-            encoded_pixels.push(a);
-
+                pixels.push((pix[0], pix[1], pix[2], pix[3]));
+                let r = encode(pix[0]);
+                let g = encode(pix[1]);
+                let b = encode(pix[2]);
+                let a = encode(pix[3]);
+                encoded_pixels.push(r);
+                encoded_pixels.push(g);
+                encoded_pixels.push(b);
+                encoded_pixels.push(a);
+            }
         }
 
+        // prepare 32 bit resolution headers as eight 8 bit values
+        let header = [&width[..], &height[..]].concat();
+        let header_bytes = header
+            .iter()
+            .map(|s| u8::from_str_radix(s, 2).unwrap())
+            .collect::<Vec<_>>();
+
+        let bytes: Vec<u8> = encoded_pixels
+            .iter()
+            .map(|s| u8::from_str_radix(s, 2).unwrap())
+            .collect();
+
+        // combine the headers and bytes
+        let comb = [&sig[..], &header_bytes[..], &bytes[..]].concat();
+        fs::write(full_name.clone(), comb).expect("Should be able to write");
+
+        comp(&*full_name.clone(), convert_from);
     }
-
-    // prepare 32 bit resolution headers as eight 8 bit values
-    let header =  [&width[..],&height[..]].concat();
-    let header_bytes = header
-        .iter()
-        .map(|s| u8::from_str_radix(s, 2).unwrap())
-        .collect::<Vec<_>>();
-    let bytes: Vec<u8> = encoded_pixels
-        .iter()
-        .map(|s| u8::from_str_radix(s, 2).unwrap())
-        .collect();
-
-    // combine the headers and bytes
-    let comb = [&header_bytes[..],&bytes[..]].concat();
-    fs::write(full_name.clone(), comb).expect("Should be able to write");
-
-    comp(&*full_name.clone(), convert_from);
-
 
 
     // reading
-    let data = fs::read(full_name.clone()).unwrap();
+    let mut data = fs::read(full_name.clone()).unwrap();
+    data.drain(0..sig_len);
     let mut header_bits = data.clone();
     header_bits.truncate(8);
     let extracted_headers = headers_parser(header_bits);
