@@ -9,6 +9,7 @@ fn encode(n:u8) -> String{
 
 
 
+
     let mut curr_a:Vec<bool> = Vec::new();
     let mut nxt:u8=n;
     let mut str_b = String::new();
@@ -169,11 +170,17 @@ fn main() {
     ];
     let sig_len= 26;
     println!("sig_len: {}", sig_len);
-    let extension = ".sahur";
-    let file_name = "tung";
+    let output_directory = "output/";
+    let extension = ".rbf";
+    let mut file_name = "tung";
+    let convert = true;
+    let convert_from = "SampleImages/debug.png";
+
+    fs::create_dir_all(output_directory).unwrap();
+    let binding = output_directory.to_owned() + file_name;
+    file_name = &*binding;
     let full_name = file_name.to_owned()+extension;
-    let convert:bool = true;
-    let convert_from = "debug.png";
+
     if convert {
         let img = ImageReader::open(convert_from).expect("Could not open image").decode().unwrap();
         let mut pixels = Vec::new();
@@ -235,9 +242,19 @@ fn main() {
     let h = extracted_headers[0];
 
 
-    let mut win = Window::new("RGBA", w as usize,h as usize, WindowOptions::default()).expect("Window creation failed");
+    let mut win = Window::new(
+        "RGBA",
+        w as usize,
+        h as usize,
+        WindowOptions {
+            resize: true,
+            ..WindowOptions::default()
+        },
+    ).expect("Window creation failed");
 
-    let mut buf = vec![0u32; (w*h) as usize];
+    let src_w = w as usize;
+    let src_h = h as usize;
+    let mut buf = vec![0u32; src_w * src_h];
     let rgba = data.clone().drain(8..data.len()).collect::<Vec<_>>();
 
     // turn into buffer
@@ -251,8 +268,43 @@ fn main() {
     }
 
 
+    let mut frame_buf: Vec<u32> = Vec::new();
     while win.is_open() {
-        win.update_with_buffer(&buf, w as usize, h as usize).unwrap();
+        let (win_w, win_h) = win.get_size();
+        if win_w == 0 || win_h == 0 {
+            win.update();
+            continue;
+        }
+
+        if frame_buf.len() != win_w * win_h {
+            frame_buf.resize(win_w * win_h, 0);
+        }
+        frame_buf.fill(0);
+
+        let src_aspect = src_w as f32 / src_h as f32;
+        let win_aspect = win_w as f32 / win_h as f32;
+        let (draw_w, draw_h) = if win_aspect > src_aspect {
+            (((win_h as f32) * src_aspect).round() as usize, win_h)
+        } else {
+            (win_w, ((win_w as f32) / src_aspect).round() as usize)
+        };
+
+        let draw_w = draw_w.max(1).min(win_w);
+        let draw_h = draw_h.max(1).min(win_h);
+        let off_x = (win_w - draw_w) / 2;
+        let off_y = (win_h - draw_h) / 2;
+
+        for y in 0..draw_h {
+            let src_y = y * src_h / draw_h;
+            let dst_row = (off_y + y) * win_w + off_x;
+            let src_row = src_y * src_w;
+            for x in 0..draw_w {
+                let src_x = x * src_w / draw_w;
+                frame_buf[dst_row + x] = buf[src_row + src_x];
+            }
+        }
+
+        win.update_with_buffer(&frame_buf, win_w, win_h).unwrap();
     }
 
 }
