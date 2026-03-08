@@ -46,10 +46,12 @@ fn headers_parser(vals:Vec<u8>) -> Vec<u32> {
     vec![height, width]
 }
 
-fn pixel_compare(c_pixel:Vec<u8>,o_pixel:Rgba<u8>) -> bool{
+fn pixel_compare(c_pixel:Vec<u8>,o_pixel:Rgba<u8>, verbose: bool) -> bool{
     let o_pixel_vec = vec![o_pixel[0], o_pixel[1], o_pixel[2], o_pixel[3]];
-    println!("{:?}", c_pixel);
-    println!("{:?}", o_pixel_vec);
+    if verbose {
+        println!("{:?}", c_pixel);
+        println!("{:?}", o_pixel_vec);
+    }
     if c_pixel == o_pixel_vec{
         true
     }else{
@@ -57,8 +59,12 @@ fn pixel_compare(c_pixel:Vec<u8>,o_pixel:Rgba<u8>) -> bool{
     }
 
 }
-fn comp(path_to_converted:&str, path_to_original:&str){
-    println!("comp ran");
+fn comp(path_to_converted:&str, path_to_original:&str, verbose: bool){
+    let mut passed_tests = 0;
+    let mut failed_tests = 0;
+    if verbose {
+        println!("comp ran");
+    }
     let og_image = ImageReader::open(path_to_original).expect("Could not decode original path").decode().unwrap();
     let mut conv_data = fs::read(path_to_converted).unwrap();
     let mut sig_extracted = conv_data.clone();
@@ -69,11 +75,19 @@ fn comp(path_to_converted:&str, path_to_original:&str){
     ];
     sig_extracted.truncate(26);
 
-    println!("Detecting if signatures match");
+    if verbose {
+        println!("Detecting if signatures match");
+    }
     if sig_extracted == sig{
-        println!("Signatures match!!! :D");
+        passed_tests += 1;
+        if verbose {
+            println!("Signatures match!!! :D");
+        }
     }else{
-        println!("Signatures dont match D:<")
+        failed_tests += 1;
+        if verbose {
+            println!("Signatures dont match D:<");
+        }
     }
     conv_data.drain(0..26);
     let mut header_bits = conv_data.clone();
@@ -85,37 +99,84 @@ fn comp(path_to_converted:&str, path_to_original:&str){
     let og_h:u32 = og_image.height().try_into().unwrap();
     let rgba_data = conv_data.clone().drain(8..conv_data.len()).collect::<Vec<_>>();
     let rgba_chunks = rgba_data.chunks(4);
-    println!("Comparing dimensions");
+    if verbose {
+        println!("Comparing dimensions");
+    }
     if w == og_w{
-        println!("Widths are equal");
+        passed_tests += 1;
+        if verbose {
+            println!("Widths are equal");
+        }
     }else {
-        println!("Widths are not equal, og width: {}, new width: {}", og_w,w);
+        failed_tests += 1;
+        if verbose {
+            println!("Widths are not equal, og width: {}, new width: {}", og_w,w);
+        }
     }
     if h == og_h{
-        println!("Heights are equal");
+        passed_tests += 1;
+        if verbose {
+            println!("Heights are equal");
+        }
     }else {
-        println!("Heights are not equal, og height: {}, new height: {}", og_h,h);
+        failed_tests += 1;
+        if verbose {
+            println!("Heights are not equal, og height: {}, new height: {}", og_h,h);
+        }
     }
 
-    println!("Comparing top left pixel");
-    if pixel_compare(rgba_chunks.clone().nth(0).unwrap().to_vec(),og_image.get_pixel(0,0)){
-        println!("top left pixels are equal");
+    if verbose {
+        println!("Comparing top left pixel");
+    }
+    if pixel_compare(rgba_chunks.clone().nth(0).unwrap().to_vec(),og_image.get_pixel(0,0), verbose){
+        passed_tests += 1;
+        if verbose {
+            println!("top left pixels are equal");
+        }
     }else{
-        println!("top left pixels are not equal");
+        failed_tests += 1;
+        if verbose {
+            println!("top left pixels are not equal");
+        }
     }
-    println!("Comparing bottom left pixel");
-    if pixel_compare(rgba_chunks.clone().nth((w*(h - 1)) as usize).unwrap().to_vec(), og_image.get_pixel(0, og_image.height()-1)){
-        println!("bottom left pixels are equal");
+    if verbose {
+        println!("Comparing bottom left pixel");
     }
-    println!("Comparing top right pixel");
-    if pixel_compare(rgba_chunks.clone().nth((w - 1) as usize).unwrap().to_vec(), og_image.get_pixel(og_image.width()-1, 0)){
-        println!("top right pixels are equal");
+    if pixel_compare(rgba_chunks.clone().nth((w*(h - 1)) as usize).unwrap().to_vec(), og_image.get_pixel(0, og_image.height()-1), verbose){
+        passed_tests += 1;
+        if verbose {
+            println!("bottom left pixels are equal");
+        }
+    } else {
+        failed_tests += 1;
     }
-    println!("Comparing bottom right pixel");
-    if pixel_compare(rgba_chunks.clone().nth((w*h) as usize -1).unwrap().to_vec(),og_image.get_pixel(og_image.width()-1, og_image.height()-1)){
-        println!("bottom right pixels are equal");
+    if verbose {
+        println!("Comparing top right pixel");
     }
-    println!("Headers: {:?}", headers);
+    if pixel_compare(rgba_chunks.clone().nth((w - 1) as usize).unwrap().to_vec(), og_image.get_pixel(og_image.width()-1, 0), verbose){
+        passed_tests += 1;
+        if verbose {
+            println!("top right pixels are equal");
+        }
+    } else {
+        failed_tests += 1;
+    }
+    if verbose {
+        println!("Comparing bottom right pixel");
+    }
+    if pixel_compare(rgba_chunks.clone().nth((w*h) as usize -1).unwrap().to_vec(),og_image.get_pixel(og_image.width()-1, og_image.height()-1), verbose){
+        passed_tests += 1;
+        if verbose {
+            println!("bottom right pixels are equal");
+        }
+    } else {
+        failed_tests += 1;
+    }
+    if verbose {
+        println!("Headers: {:?}", headers);
+    } else {
+        println!("Tests passed: {}, failed: {}", passed_tests, failed_tests);
+    }
 }
 
 fn main() {
@@ -132,7 +193,8 @@ fn main() {
     let mut file_name = "tung";
     let convert = true;
     let convert_from = "SampleImages/img1.png";
-
+    let size_rounding_place:f64 = 100.0;
+    let verbose_comp = false;
     fs::create_dir_all(output_directory).unwrap();
     let binding = output_directory.to_owned() + file_name;
     file_name = &*binding;
@@ -176,10 +238,13 @@ fn main() {
         let comb = [&sig[..], &header_bytes[..], &bytes[..]].concat();
         println!("Time to encode: {}",now.elapsed().unwrap().as_millis());
         let now2 = SystemTime::now();
-        fs::write(full_name.clone(), comb).expect("Should be able to write");
-
-        comp(&*full_name.clone(), convert_from);
+        fs::write(full_name.clone(), comb.clone()).expect("Should be able to write");
         println!("Time to write: {}",now2.elapsed().unwrap().as_millis());
+        println!("Length of comb: {}MB",(comb.len() as f64/1e+6 * size_rounding_place).round()/size_rounding_place);
+        println!("Running comp");
+        let now3 = SystemTime::now();
+        comp(&*full_name.clone(), convert_from, verbose_comp);
+        println!("Time to comp: {}",now3.elapsed().unwrap().as_millis());
     }
 
 
