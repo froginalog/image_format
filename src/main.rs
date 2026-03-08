@@ -1,37 +1,9 @@
 
 use std::{fs};
-
+use std::time::SystemTime;
 use bigdecimal::num_traits::Euclid;
 use image::{GenericImageView, ImageReader, Rgba};
 use minifb::{Window, WindowOptions};
-
-fn encode(n:u8) -> String{
-
-
-
-
-    let mut curr_a:Vec<bool> = Vec::new();
-    let mut nxt:u8=n;
-    let mut str_b = String::new();
-    for _ in 0..8{
-        let res = nxt.div_rem_euclid(&2);
-        curr_a.push(res.1 > 0);
-
-        nxt = res.0;
-    }
-
-    curr_a.reverse();
-    for val in curr_a {
-        if val{
-            str_b.push('1');
-        }else{
-            str_b.push('0');
-        }
-
-    }
-
-    str_b
-}
 
 
 fn to_binary(n:u32) -> Vec<String> {
@@ -69,25 +41,9 @@ fn headers_parser(vals:Vec<u8>) -> Vec<u32> {
         println!("Not 8 bytes");
         std::process::exit(1);
     }
-    //println!("{:#?}",vals);
-    let width = [vals[0],vals[1],vals[2],vals[3]];
-    let height = [vals[4],vals[5],vals[6],vals[7]];
-    let mut height_str = String::new();
-    let mut width_str = String::new();
-    for val in height{
-        height_str = height_str + &*encode(val)
-    }
-    for val in width{
-        width_str = width_str + &*encode(val)
-    }
-    // println!("{:#?}",height_str);
-    // println!("{:#?}",width_str);
-    let mut final_vals = Vec::new();
-
-    final_vals.push(u32::from_str_radix(&height_str, 2).unwrap());
-    final_vals.push(u32::from_str_radix(&width_str, 2).unwrap());
-
-    final_vals
+    let width = u32::from_be_bytes([vals[0], vals[1], vals[2], vals[3]]);
+    let height = u32::from_be_bytes([vals[4], vals[5], vals[6], vals[7]]);
+    vec![height, width]
 }
 
 fn pixel_compare(c_pixel:Vec<u8>,o_pixel:Rgba<u8>) -> bool{
@@ -169,12 +125,13 @@ fn main() {
         32, 58, 51
     ];
     let sig_len= 26;
+    let now = SystemTime::now();
     println!("sig_len: {}", sig_len);
     let output_directory = "output/";
     let extension = ".rbf";
     let mut file_name = "tung";
     let convert = true;
-    let convert_from = "SampleImages/debug.png";
+    let convert_from = "SampleImages/img1.png";
 
     fs::create_dir_all(output_directory).unwrap();
     let binding = output_directory.to_owned() + file_name;
@@ -182,15 +139,13 @@ fn main() {
     let full_name = file_name.to_owned()+extension;
 
     if convert {
+
         let img = ImageReader::open(convert_from).expect("Could not open image").decode().unwrap();
         let mut pixels = Vec::new();
         let mut encoded_pixels = Vec::new();
 
         let width = to_binary(img.width());
         let height = to_binary(img.height());
-        let mut size_headers = Vec::new();
-        size_headers.push(&width);
-        size_headers.push(&height);
         println!("Height: {}, Width: {}", img.height(), img.width());
 
         // encode image
@@ -199,14 +154,10 @@ fn main() {
                 let pix = img.get_pixel(x, y);
 
                 pixels.push((pix[0], pix[1], pix[2], pix[3]));
-                let r = encode(pix[0]);
-                let g = encode(pix[1]);
-                let b = encode(pix[2]);
-                let a = encode(pix[3]);
-                encoded_pixels.push(r);
-                encoded_pixels.push(g);
-                encoded_pixels.push(b);
-                encoded_pixels.push(a);
+                encoded_pixels.push(pix[0]);
+                encoded_pixels.push(pix[1]);
+                encoded_pixels.push(pix[2]);
+                encoded_pixels.push(pix[3]);
             }
         }
 
@@ -217,20 +168,23 @@ fn main() {
             .map(|s| u8::from_str_radix(s, 2).unwrap())
             .collect::<Vec<_>>();
 
-        let bytes: Vec<u8> = encoded_pixels
-            .iter()
-            .map(|s| u8::from_str_radix(s, 2).unwrap())
-            .collect();
+        let bytes = encoded_pixels;
+
 
         // combine the headers and bytes
+
         let comb = [&sig[..], &header_bytes[..], &bytes[..]].concat();
+        println!("Time to encode: {}",now.elapsed().unwrap().as_millis());
+        let now2 = SystemTime::now();
         fs::write(full_name.clone(), comb).expect("Should be able to write");
 
         comp(&*full_name.clone(), convert_from);
+        println!("Time to write: {}",now2.elapsed().unwrap().as_millis());
     }
 
 
     // reading
+    let now3 = SystemTime::now();
     let mut data = fs::read(full_name.clone()).unwrap();
     data.drain(0..sig_len);
     let mut header_bits = data.clone();
@@ -266,7 +220,7 @@ fn main() {
 
         buf[i as usize] = (r << 16) | (g << 8) | b;
     }
-
+    println!("Time to convert to buffer: {}", now3.elapsed().unwrap().as_millis());
 
     let mut frame_buf: Vec<u32> = Vec::new();
     while win.is_open() {
